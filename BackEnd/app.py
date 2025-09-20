@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from ibm_watsonx import generate_linkedin_post
+from ibm_watsonx import generate_podcast_outline
 
 app = Flask(__name__)
 CORS(app)
@@ -57,6 +59,28 @@ def article_detail(article_id):
     if not detail:
         return jsonify({"error": "not found"}), 404
     return jsonify(detail)
+
+@app.route('/generate-linkedin-post', methods=['POST'])
+def linkedin_post():
+    data = request.get_json()
+    articles = data.get("articles", [])
+
+    if not articles or not isinstance(articles, list):
+        return jsonify({"error": "Please provide a list of articles"}), 400
+
+    post_text = generate_linkedin_post(articles)
+    return jsonify({"linkedin_post": post_text})
+
+@app.route('/generate-podcast-outline', methods=['POST'])
+def podcast_outline():
+    data = request.get_json()
+    articles = data.get("articles", [])
+
+    if not articles or not isinstance(articles, list):
+        return jsonify({"error": "Please provide a list of articles"}), 400
+
+    outline = generate_podcast_outline(articles)
+    return jsonify({"podcast_outline": outline})
 
 if __name__ == '__main__':
     app.run(debug=True)
