@@ -2,19 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const NewsDashboard(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: const NewsDashboard(),
+  );
 }
 
 class NewsDashboard extends StatefulWidget {
@@ -24,10 +20,8 @@ class NewsDashboard extends StatefulWidget {
 }
 
 class _NewsDashboardState extends State<NewsDashboard> {
-  // Backend base URL
   final String baseUrl = 'http://127.0.0.1:5000';
 
-  // UI state
   String selectedTab = 'Realtime';
   String topic = '';
   List<String> availableSources = ['New York Times', 'Bloomberg', 'Reuters'];
@@ -35,72 +29,87 @@ class _NewsDashboardState extends State<NewsDashboard> {
   List<dynamic> articles = [];
   Map<String, dynamic>? selectedArticleDetails;
 
-  bool sourcesMenuOpen = false; // for dropdown visibility
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
-
-  void _showOverlay() {
-    _overlayEntry = _createOverlayEntry();
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  void _refreshOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = _createOverlayEntry();
-    Overlay.of(context).insert(_overlayEntry!);
-  }
+  bool sourcesMenuOpen = false;
+  final GlobalKey _buttonKey = GlobalKey();
 
   void _toggleSourcesMenu() {
     if (sourcesMenuOpen) {
       _overlayEntry?.remove();
       sourcesMenuOpen = false;
     } else {
-      _overlayEntry = _createOverlayEntry();
+      final RenderBox renderBox =
+          _buttonKey.currentContext!.findRenderObject() as RenderBox;
+      final buttonSize = renderBox.size;
+      final buttonOffset = renderBox.localToGlobal(Offset.zero);
+      final screenWidth = MediaQuery.of(context).size.width;
+      final overlayWidth = 250.0;
+
+      // Ensure overlay doesn't go offscreen to the right
+      double dx = buttonOffset.dx;
+      if (dx + overlayWidth > screenWidth) {
+        dx = screenWidth - overlayWidth - 8; // small padding
+      }
+
+      _overlayEntry = OverlayEntry(
+        builder:
+            (context) => GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                _overlayEntry?.remove();
+                sourcesMenuOpen = false;
+                setState(() {});
+              },
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: dx,
+                    top:
+                        buttonOffset.dy + buttonSize.height + 4, // below button
+                    width: overlayWidth,
+                    child: Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(8),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.6,
+                        ),
+                        child: StatefulBuilder(
+                          builder:
+                              (context, setOverlayState) => ListView(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.all(8),
+                                children:
+                                    availableSources.map((source) {
+                                      return SwitchListTile(
+                                        title: Text(source),
+                                        value: selectedSources.contains(source),
+                                        onChanged: (val) {
+                                          setOverlayState(() {
+                                            if (val) {
+                                              selectedSources.add(source);
+                                            } else {
+                                              selectedSources.remove(source);
+                                            }
+                                          });
+                                          fetchArticles();
+                                        },
+                                      );
+                                    }).toList(),
+                              ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      );
+
       Overlay.of(context).insert(_overlayEntry!);
       sourcesMenuOpen = true;
     }
-    setState(() {});
-  }
-
-  OverlayEntry _createOverlayEntry() {
-    RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
-    return OverlayEntry(
-      builder:
-          (context) => Positioned(
-            width: 250,
-            child: CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: const Offset(0, 40),
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(8),
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.all(8),
-                  children:
-                      availableSources.map((source) {
-                        return SwitchListTile(
-                          title: Text(source),
-                          value: selectedSources.contains(source),
-                          onChanged: (val) {
-                            setState(() {
-                              if (val) {
-                                selectedSources.add(source);
-                              } else {
-                                selectedSources.remove(source);
-                              }
-                              _refreshOverlay(); // rebuild overlay so switch updates
-                            });
-                          },
-                        );
-                      }).toList(),
-                ),
-              ),
-            ),
-          ),
-    );
   }
 
   Future<void> fetchArticles() async {
@@ -124,101 +133,84 @@ class _NewsDashboardState extends State<NewsDashboard> {
   Future<void> fetchArticleDetail(int id) async {
     final response = await http.get(Uri.parse('$baseUrl/article/$id'));
     if (response.statusCode == 200) {
-      setState(() {
-        selectedArticleDetails = json.decode(response.body);
-      });
+      setState(() => selectedArticleDetails = json.decode(response.body));
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            const Text(
-              'Wellerhoffs Financial News Detection',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Search topic input
-            Expanded(
-              child: TextField(
-                onChanged: (v) => topic = v,
-                decoration: InputDecoration(
-                  hintText: 'Search topic…',
-                  filled: true,
-                  fillColor: Colors.grey[200],
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide.none,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Multi-select sources
-            CompositedTransformTarget(
-              link: _layerLink,
-              child: ElevatedButton(
-                onPressed: _toggleSourcesMenu,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-                child: Text(
-                  'Select sources',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: fetchArticles,
-              child: const Text('Search'),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      backgroundColor: Colors.white,
+      elevation: 1,
+      titleSpacing: 16,
+      title: const Text(
+        'Wellerhoffs Financial News Detection',
+        style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
       ),
-      body: Row(
-        children: [
-          // LEFT SIDEBAR
-          Expanded(
-            flex: 2,
+      actions: [
+        SizedBox(
+          width: 250, // adjust width as needed
+          child: TextField(
+            onChanged: (v) => topic = v,
+            onSubmitted: (_) => fetchArticles(), // refresh on Enter
+            decoration: InputDecoration(
+              hintText: 'Search topic…',
+              filled: true,
+              fillColor: Colors.grey[200],
+              border: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        CompositedTransformTarget(
+          link: _layerLink,
+          child: ElevatedButton(
+            key: _buttonKey,
+            onPressed: _toggleSourcesMenu,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+            child: const Text(
+              'Select sources',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+      ],
+    ),
+
+    body: Row(
+      children: [
+        // LEFT SIDEBAR
+        Expanded(
+          flex: 2,
+          child: Container(
+            color: Colors.grey[200], // slightly grayer background
             child: Column(
               children: [
-                // Tabs
+                const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children:
-                      ['Realtime', 'Daily', 'Weekly', 'Monthly']
-                          .map(
-                            (tab) => TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  selectedTab = tab;
-                                });
-                                fetchArticles(); // automatically refresh news when tab changes
-                              },
-
-                              child: Text(
-                                tab,
-                                style: TextStyle(
-                                  color:
-                                      selectedTab == tab
-                                          ? Colors.black
-                                          : Colors.grey,
-                                ),
-                              ),
+                      ['Realtime', 'Daily', 'Weekly', 'Monthly'].map((tab) {
+                        final isSelected = selectedTab == tab;
+                        return TextButton(
+                          onPressed: () {
+                            setState(() => selectedTab = tab);
+                            fetchArticles(); // refresh on tab change
+                          },
+                          child: Text(
+                            tab,
+                            style: TextStyle(
+                              color: isSelected ? Colors.black : Colors.grey,
                             ),
-                          )
-                          .toList(),
+                          ),
+                        );
+                      }).toList(),
                 ),
-                const Divider(height: 1),
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
@@ -226,9 +218,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     itemBuilder: (context, index) {
                       final article = articles[index];
                       return GestureDetector(
-                        onTap: () {
-                          fetchArticleDetail(article['id']);
-                        },
+                        onTap: () => fetchArticleDetail(article['id']),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
@@ -272,49 +262,50 @@ class _NewsDashboardState extends State<NewsDashboard> {
               ],
             ),
           ),
-          // RIGHT PANEL
-          Expanded(
-            flex: 3,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child:
-                  selectedArticleDetails == null
-                      ? const Center(child: Text('Select an article'))
-                      : SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              selectedArticleDetails!['overview'],
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                            const SizedBox(height: 16),
-                            Wrap(
-                              spacing: 8,
-                              children:
-                                  (selectedArticleDetails!['tags'] as List)
-                                      .map((tag) => Chip(label: Text(tag)))
-                                      .toList(),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Live Ticker',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            ...((selectedArticleDetails!['live_ticker'] as List)
-                                .map(
-                                  (t) => Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: Text(t),
-                                  ),
-                                )),
-                          ],
-                        ),
+        ),
+
+        // RIGHT PANEL
+        Expanded(
+          flex: 3,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            child:
+                selectedArticleDetails == null
+                    ? const Center(child: Text('Select an article'))
+                    : SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedArticleDetails!['overview'],
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 8,
+                            children:
+                                (selectedArticleDetails!['tags'] as List)
+                                    .map((tag) => Chip(label: Text(tag)))
+                                    .toList(),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Live Ticker',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          ...((selectedArticleDetails!['live_ticker'] as List)
+                              .map(
+                                (t) => Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Text(t),
+                                ),
+                              )),
+                        ],
                       ),
-            ),
+                    ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
