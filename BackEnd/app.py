@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from ibm_watsonx import generate_linkedin_post
 from ibm_watsonx import generate_podcast_outline
@@ -71,16 +71,30 @@ def linkedin_post():
     post_text = generate_linkedin_post(articles)
     return jsonify({"linkedin_post": post_text})
 
-@app.route('/generate-podcast-outline', methods=['POST'])
-def podcast_outline():
+@app.route("/generate-podcast-pdf", methods=["POST"])
+def generate_podcast_pdf():
+    """
+    Request body JSON example:
+    {
+        "articles": [
+            {"title": "Market Rally Continues", "summary": "Stocks rose sharply..."},
+            {"title": "Tech Earnings Report", "summary": "Tech companies reported strong earnings..."}
+        ]
+    }
+    """
     data = request.get_json()
-    articles = data.get("articles", [])
+    if not data or "articles" not in data:
+        return jsonify({"error": "Missing 'articles' in request body"}), 400
 
-    if not articles or not isinstance(articles, list):
-        return jsonify({"error": "Please provide a list of articles"}), 400
+    # Step 1: Generate the podcast outline
+    outline = generate_podcast_outline(data["articles"])
 
-    outline = generate_podcast_outline(articles)
-    return jsonify({"podcast_outline": outline})
+    # Step 2: Create PDF
+    pdf_file = generate_pdf("Podcast Outline", outline, filename="podcast_outline.pdf")
+
+    # Step 3: Send PDF to user
+    return send_file(pdf_file, as_attachment=True, download_name="podcast_outline.pdf")
+
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,54 +1,39 @@
 import requests
 import json
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 
-# Load API key & project ID from env vars for safety
+# IBM Cloud details
 API_KEY = "pwtAZmQCwiWHMVFVR48HnqIY238MJe515VPjrVq-t8B3"
 PROJECT_ID = "be106dec-5fd0-4d0d-b958-5b980828e551"
 URL = "https://eu-de.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-29"
 MODEL = "ibm/granite-3-3-8b-instruct"  # or "ibm/granite-13b-chat-v2"
 
-def generate_linkedin_post(articles):
-    """
-    Given a list of articles (dicts with 'title' and 'summary'),
-    ask watsonx.ai to generate a LinkedIn post.
-    """
-
-    # Step 1: Get IAM token
+def get_iam_token():
+    """Fetch IAM token from IBM Cloud."""
     token_resp = requests.post(
         "https://iam.cloud.ibm.com/identity/token",
         data={"apikey": API_KEY, "grant_type": "urn:ibm:params:oauth:grant-type:apikey"},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     token_resp.raise_for_status()
-    iam_token = token_resp.json()["access_token"]
+    return token_resp.json()["access_token"]
 
+def generate_text(prompt, max_tokens=500, min_tokens=100, decoding_method="greedy"):
+    """Generate text using watsonx.ai."""
+    iam_token = get_iam_token()
     headers = {
         "Authorization": f"Bearer {iam_token}",
         "Content-Type": "application/json"
     }
 
-    # Step 2: Build the input prompt
-    article_text = "\n".join(
-        [f"- {a['title']}: {a['summary']}" for a in articles]
-    )
-
-    prompt = f"""You are a social media assistant.
-Write a professional LinkedIn post summarizing the following news articles,
-focusing on their impact on the financial markets.
-Make it engaging but concise, and highlight the key trends.
-
-Articles:
-{article_text}
-
-LinkedIn Post:"""
-
     payload = {
         "input": prompt,
         "parameters": {
-        "decoding_method": "greedy",      # can also try "sample" for more variety
-        "max_new_tokens": 500,            # allow a lot more tokens!
-        "min_new_tokens": 100             # force it to write more than just one line
-    },
+            "decoding_method": decoding_method,
+            "max_new_tokens": max_tokens,
+            "min_new_tokens": min_tokens
+        },
         "model_id": MODEL,
         "project_id": PROJECT_ID
     }
@@ -62,32 +47,23 @@ LinkedIn Post:"""
     except Exception:
         return json.dumps(result, indent=2)
 
+def generate_linkedin_post(articles):
+    """Generate a professional LinkedIn post from article list."""
+    article_text = "\n".join([f"- {a['title']}: {a['summary']}" for a in articles])
+    prompt = f"""You are a social media assistant.
+Write a professional LinkedIn post summarizing the following news articles,
+focusing on their impact on the financial markets.
+Make it engaging but concise, and highlight the key trends.
+
+Articles:
+{article_text}
+
+LinkedIn Post:"""
+    return generate_text(prompt)
 
 def generate_podcast_outline(articles):
-    """
-    Given a list of articles (dicts with 'title' and 'summary'),
-    ask watsonx.ai to generate a podcast discussion outline.
-    """
-
-    # Step 1: Get IAM token
-    token_resp = requests.post(
-        "https://iam.cloud.ibm.com/identity/token",
-        data={"apikey": API_KEY, "grant_type": "urn:ibm:params:oauth:grant-type:apikey"},
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
-    )
-    token_resp.raise_for_status()
-    iam_token = token_resp.json()["access_token"]
-
-    headers = {
-        "Authorization": f"Bearer {iam_token}",
-        "Content-Type": "application/json"
-    }
-
-    # Step 2: Build the input prompt
-    article_text = "\n".join(
-        [f"- {a['title']}: {a['summary']}" for a in articles]
-    )
-
+    """Generate a podcast episode outline from article list."""
+    article_text = "\n".join([f"- {a['title']}: {a['summary']}" for a in articles])
     prompt = f"""You are a podcast producer.
 Create an outline for a podcast episode discussing the following news articles.
 The outline should include:
@@ -100,23 +76,33 @@ Articles:
 {article_text}
 
 Podcast Outline:"""
+    return generate_text(prompt)
 
-    payload = {
-        "input": prompt,
-        "parameters": {
-        "decoding_method": "greedy",      # can also try "sample" for more variety
-        "max_new_tokens": 500,            # allow a lot more tokens!
-        "min_new_tokens": 100             # force it to write more than just one line
-    },
-        "model_id": MODEL,
-        "project_id": PROJECT_ID
-    }
+def generate_pdf(title, text, filename="output.pdf"):
+    """Save generated text to a PDF using ReportLab."""
+    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(filename)
+    story = []
 
-    resp = requests.post(URL, headers=headers, json=payload)
-    resp.raise_for_status()
-    result = resp.json()
+    story.append(Paragraph(title, styles["Title"]))
+    story.append(Spacer(1, 12))
+    for line in text.split("\n"):
+        story.append(Paragraph(line, styles["Normal"]))
+        story.append(Spacer(1, 6))
 
-    try:
-        return result["results"][0]["generated_text"].strip()
-    except Exception:
-        return json.dumps(result, indent=2)
+    doc.build(story)
+    return filename
+
+
+articles = [
+    {"title": "Market Rally Continues", "summary": "Stocks rose sharply..."},
+    {"title": "Tech Earnings Report", "summary": "Tech companies reported strong earnings..."}
+]
+
+# Generate the podcast outline text
+outline_text = generate_podcast_outline(articles)
+
+# Generate PDF with that text
+pdf_file = generate_pdf("Podcast Outline", outline_text, filename="podcast_outline.pdf")
+
+print("✅ PDF created:", pdf_file)
