@@ -1,11 +1,11 @@
 import requests
 import json
-import os
 
 # Load API key & project ID from env vars for safety
 API_KEY = "pwtAZmQCwiWHMVFVR48HnqIY238MJe515VPjrVq-t8B3"
-PROJECT_ID = "project-id"
+PROJECT_ID = "be106dec-5fd0-4d0d-b958-5b980828e551"
 URL = "https://eu-de.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-29"
+MODEL = "ibm/granite-3-3-8b-instruct"  # or "ibm/granite-13b-chat-v2"
 
 def generate_linkedin_post(articles):
     """
@@ -45,10 +45,11 @@ LinkedIn Post:"""
     payload = {
         "input": prompt,
         "parameters": {
-            "decoding_method": "greedy",
-            "max_new_tokens": 300,
-        },
-        "model_id": "ibm/granite-13b-chat-v2",
+        "decoding_method": "greedy",      # can also try "sample" for more variety
+        "max_new_tokens": 500,            # allow a lot more tokens!
+        "min_new_tokens": 100             # force it to write more than just one line
+    },
+        "model_id": MODEL,
         "project_id": PROJECT_ID
     }
 
@@ -103,10 +104,11 @@ Podcast Outline:"""
     payload = {
         "input": prompt,
         "parameters": {
-            "decoding_method": "greedy",
-            "max_new_tokens": 500,
-        },
-        "model_id": "ibm/granite-13b-chat-v2",
+        "decoding_method": "greedy",      # can also try "sample" for more variety
+        "max_new_tokens": 500,            # allow a lot more tokens!
+        "min_new_tokens": 100             # force it to write more than just one line
+    },
+        "model_id": MODEL,
         "project_id": PROJECT_ID
     }
 

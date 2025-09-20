@@ -4,6 +4,7 @@ import json
 API_KEY = "pwtAZmQCwiWHMVFVR48HnqIY238MJe515VPjrVq-t8B3"
 URL = "https://eu-de.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-29"
 PROJECT_ID = "be106dec-5fd0-4d0d-b958-5b980828e551"
+MODEL = "ibm/granite-3-3-8b-instruct"  # or "ibm/granite-13b-chat-v2"
 
 # Get IAM token
 token_resp = requests.post(
@@ -19,14 +20,16 @@ headers = {
 }
 
 payload = {
-    "input": """ Write a long poem about the vanity of human wishes.""",
+    "input": "Write a long, detailed poem in 6 stanzas about the beauty of autumn evenings.",
     "parameters": {
-        "decoding_method": "greedy",
-        "max_new_tokens": 50,
+        "decoding_method": "greedy",      # can also try "sample" for more variety
+        "max_new_tokens": 500,            # allow a lot more tokens!
+        "min_new_tokens": 100             # force it to write more than just one line
     },
-    "model_id": "ibm/granite-13b-instruct-v2",  # Large model, adjust if needed
-    "project_id": PROJECT_ID      # From watsonx.ai Studio project
+    "model_id": MODEL,  # switch to newer model
+    "project_id": PROJECT_ID
 }
+
 
 resp = requests.post(URL, headers=headers, json=payload)
 print(json.dumps(resp.json(), indent=2))
