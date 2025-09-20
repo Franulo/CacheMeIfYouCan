@@ -35,6 +35,74 @@ class _NewsDashboardState extends State<NewsDashboard> {
   List<dynamic> articles = [];
   Map<String, dynamic>? selectedArticleDetails;
 
+  bool sourcesMenuOpen = false; // for dropdown visibility
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+
+  void _showOverlay() {
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _refreshOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _toggleSourcesMenu() {
+    if (sourcesMenuOpen) {
+      _overlayEntry?.remove();
+      sourcesMenuOpen = false;
+    } else {
+      _overlayEntry = _createOverlayEntry();
+      Overlay.of(context).insert(_overlayEntry!);
+      sourcesMenuOpen = true;
+    }
+    setState(() {});
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    return OverlayEntry(
+      builder:
+          (context) => Positioned(
+            width: 250,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: const Offset(0, 40),
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(8),
+                  children:
+                      availableSources.map((source) {
+                        return SwitchListTile(
+                          title: Text(source),
+                          value: selectedSources.contains(source),
+                          onChanged: (val) {
+                            setState(() {
+                              if (val) {
+                                selectedSources.add(source);
+                              } else {
+                                selectedSources.remove(source);
+                              }
+                              _refreshOverlay(); // rebuild overlay so switch updates
+                            });
+                          },
+                        );
+                      }).toList(),
+                ),
+              ),
+            ),
+          ),
+    );
+  }
+
   Future<void> fetchArticles() async {
     final response = await http.post(
       Uri.parse('$baseUrl/search-news'),
@@ -58,63 +126,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     if (response.statusCode == 200) {
       setState(() {
         selectedArticleDetails = json.decode(response.body);
-      });
-    }
-  }
-
-  void _showSourcesDialog() async {
-    final result = await showDialog<List<String>>(
-      context: context,
-      builder: (context) {
-        // make a copy so we don’t mutate original until Done is pressed
-        List<String> tempSelected = List.from(selectedSources);
-
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Select Sources'),
-              content: SizedBox(
-                width: 300,
-                child: ListView(
-                  shrinkWrap: true,
-                  children:
-                      availableSources.map((source) {
-                        final isSelected = tempSelected.contains(source);
-                        return CheckboxListTile(
-                          title: Text(source),
-                          value: isSelected,
-                          onChanged: (bool? checked) {
-                            setStateDialog(() {
-                              if (checked == true) {
-                                tempSelected.add(source);
-                              } else {
-                                tempSelected.remove(source);
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, tempSelected),
-                  child: const Text('Done'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result != null) {
-      setState(() {
-        selectedSources = result;
       });
     }
   }
@@ -154,14 +165,15 @@ class _NewsDashboardState extends State<NewsDashboard> {
             ),
             const SizedBox(width: 16),
             // Multi-select sources
-            ElevatedButton(
-              onPressed: _showSourcesDialog,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-              child: Text(
-                selectedSources.isEmpty
-                    ? 'Select sources'
-                    : selectedSources.join(', '),
-                style: const TextStyle(color: Colors.white),
+            CompositedTransformTarget(
+              link: _layerLink,
+              child: ElevatedButton(
+                onPressed: _toggleSourcesMenu,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                child: Text(
+                  'Select sources',
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -190,7 +202,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
                                 setState(() {
                                   selectedTab = tab;
                                 });
+                                fetchArticles(); // automatically refresh news when tab changes
                               },
+
                               child: Text(
                                 tab,
                                 style: TextStyle(
