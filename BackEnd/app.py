@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from ibm_watsonx import generate_linkedin_post
 from ibm_watsonx import generate_podcast_outline
-from helper import run_nyt_openai_pipeline  # <-- import pipeline function
+from nyt_openai import run_nyt_openai_pipeline  # <-- import pipeline function
 
 app = Flask(__name__)
 CORS(app)
@@ -57,10 +57,11 @@ def search_news():
         "custom_search": "AI"   # optional
     }
     """
+    print("fasdfdasfdas")
     data = request.get_json() or {}
 
-    year = data.get("year")
-    month = data.get("month")
+    year = 2024#data.get("year")
+    month = 1#data.get("month")
     custom_search = data.get("custom_search")
 
     if not (year and month):
