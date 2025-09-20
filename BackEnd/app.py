@@ -1,120 +1,123 @@
-"""
-New York Times Archive — Minimal CLI
+from flask import Flask, jsonify, request, send_file
+from flask_cors import CORS
+from ibm_watsonx import generate_linkedin_post
+from ibm_watsonx import generate_podcast_outline
+from helper import run_nyt_openai_pipeline  # <-- import pipeline function
 
-Usage:
-  python app.py archive --year 2025 --month 9
+app = Flask(__name__)
+CORS(app)
 
-Behavior:
-  - Performs the Archive request and prints the response JSON, pretty-formatted.
-  - No filtering is applied; the output is the raw Archive payload.
-"""
+# Dummy data
+ARTICLES = [
+    {
+        "id": 1,
+        "title": "Oracle expands cloud AI partnership",
+        "summary": "Short summary Oracle expands cloud AI partnership...",
+        "time": "4 min ago"
+    },
+    {
+        "id": 2,
+        "title": "FOMC signals readiness to keep policy restrictive",
+        "summary": "Short summary FOMC signals readiness...",
+        "time": "34 min ago"
+    },
+    {
+        "id": 3,
+        "title": "DeepSeek unveils efficient AI model",
+        "summary": "Short summary DeepSeek unveils efficient AI model...",
+        "time": "1 hour ago"
+    }
+]
 
-import argparse
-import json
-import os
-import sys
-import requests
-from dotenv import load_dotenv
-from nyt_openai import run_nyt_openai_pipeline, _trim_archive_payload
-from realtime import get_realtime_finance
+DETAILS = {
+    1: {
+        "tags": ["Technology", "US Markets"],
+        "overview": "Detailed overview about Oracle news...",
+        "live_ticker": ["Oracle update 1", "Oracle update 2"]
+    },
+    2: {
+        "tags": ["Economy"],
+        "overview": "Detailed overview about FOMC news...",
+        "live_ticker": ["FOMC update 1"]
+    },
+    3: {
+        "tags": ["AI"],
+        "overview": "Detailed overview about DeepSeek...",
+        "live_ticker": ["DeepSeek update 1", "DeepSeek update 2"]
+    }
+}
 
-# Load environment variables early so CLI sees them
-load_dotenv()
+@app.route('/search-news', methods=['POST'])
+def search_news():
+    """
+    Expects JSON body:
+    {
+        "year": 2024,
+        "month": 9,
+        "custom_search": "AI"   # optional
+    }
+    """
+    data = request.get_json() or {}
 
-NYT_API_KEY = os.getenv("NYT_API_KEY")
-NYT_ARCHIVE_URL_TMPL = "https://api.nytimes.com/svc/archive/v1/{year}/{month}.json"
-NYT_ARTICLE_SEARCH_URL = "https://api.nytimes.com/svc/search/v2/articlesearch.json"  # unused; kept for reference only
+    year = data.get("year")
+    month = data.get("month")
+    custom_search = data.get("custom_search")
 
+    if not (year and month):
+        return jsonify({"error": "Missing 'year' or 'month'"}), 400
 
-def _safe_text(resp):
     try:
-        return resp.text
-    except Exception:
-        return "<no text>"
+        results = run_nyt_openai_pipeline(
+            year=int(year),
+            month=int(month),
+            custom_search=custom_search
+        )
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/article/<int:article_id>', methods=['GET'])
+def article_detail(article_id):
+    detail = DETAILS.get(article_id)
+    if not detail:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(detail)
+
+@app.route('/generate-linkedin-post', methods=['POST'])
+def linkedin_post():
+    data = request.get_json()
+    articles = data.get("articles", [])
+
+    if not articles or not isinstance(articles, list):
+        return jsonify({"error": "Please provide a list of articles"}), 400
+
+    post_text = generate_linkedin_post(articles)
+    return jsonify({"linkedin_post": post_text})
+
+@app.route("/generate-podcast-pdf", methods=["POST"])
+def generate_podcast_pdf():
+    """
+    Request body JSON example:
+    {
+        "articles": [
+            {"title": "Market Rally Continues", "summary": "Stocks rose sharply..."},
+            {"title": "Tech Earnings Report", "summary": "Tech companies reported strong earnings..."}
+        ]
+    }
+    """
+    data = request.get_json()
+    if not data or "articles" not in data:
+        return jsonify({"error": "Missing 'articles' in request body"}), 400
+
+    # Step 1: Generate the podcast outline
+    outline = generate_podcast_outline(data["articles"])
+
+    # Step 2: Create PDF
+    pdf_file = generate_pdf("Podcast Outline", outline, filename="podcast_outline.pdf")
+
+    # Step 3: Send PDF to user
+    return send_file(pdf_file, as_attachment=True, download_name="podcast_outline.pdf")
 
 
-def _remove_key_recursive(obj, key_to_remove):
-    if isinstance(obj, dict):
-        if key_to_remove in obj:
-            obj.pop(key_to_remove, None)
-        for k, v in list(obj.items()):
-            obj[k] = _remove_key_recursive(v, key_to_remove)
-        return obj
-    if isinstance(obj, list):
-        for i in range(len(obj)):
-            obj[i] = _remove_key_recursive(obj[i], key_to_remove)
-        return obj
-    return obj
-
-
-def _print_archive_result(year: int, month: int, custom_search: str | None = None):
-    if not NYT_API_KEY:
-        print("NYT_API_KEY is not set. Export it or add to .env", file=sys.stderr)
-        sys.exit(1)
-
-    url = NYT_ARCHIVE_URL_TMPL.format(year=year, month=month)
-    params = {"api-key": NYT_API_KEY}
-    resp = requests.get(url, params=params)
-    # Log only meta.hits using already-filtered items for visibility
-    try:
-        data = resp.json()
-        # Apply same trimming rules used for OpenAI pipeline before counting
-        data = _remove_key_recursive(data, "multimedia")
-        data = _trim_archive_payload(data)
-        response = (data.get("response") or {}) if isinstance(data, dict) else {}
-        docs = response.get("docs", [])
-        hits = len(docs) if isinstance(docs, list) else None
-        if hits is not None:
-            print(f"meta: {{\"hits\": {hits}}}")
-        else:
-            print("meta: {}")
-        # Log total character length of the trimmed NYT items (docs array)
-        try:
-            payload_chars = len(json.dumps(docs, ensure_ascii=False))
-            print(f"len_chars: {payload_chars}")
-        except Exception:
-            pass
-        # Also log the trimmed NYT JSON payload
-        print(json.dumps(data, indent=2, ensure_ascii=False))
-    except Exception:
-        print("meta: {}")
-
-    # Run OpenAI pipeline and print the combined JSON result
-    result = run_nyt_openai_pipeline(year=year, month=month, custom_search=custom_search)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-
-
-#def _print_realtime(query: str | None, hours: int, limit: int):
-#    res = get_realtime_finance(existing_feed=[], query=query, hours=hours, limit=limit)
-#   print(json.dumps(res, indent=2, ensure_ascii=False))
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(description="NYT Archive minimal CLI")
-    sub = parser.add_subparsers(dest="cmd", required=True)
-
-    p_arch = sub.add_parser("archive", help="Fetch archive and run OpenAI pipeline")
-    p_arch.add_argument("--year", type=int, required=True)
-    p_arch.add_argument("--month", type=int, required=True)
-    p_arch.add_argument("--custom_search", type=str, default=None, help="Focus on topics matching this string")
-    # no limit here; we print the raw payload
-
-#    p_rt = sub.add_parser("realtime", help="Fetch last-24h finance news via web search")
-#    p_rt.add_argument("--query", type=str, default=None, help="Focus string for realtime search")
-#    p_rt.add_argument("--hours", type=int, default=24)
-#    p_rt.add_argument("--limit", type=int, default=20)
-
-    args = parser.parse_args(argv)
-
-    if args.cmd == "archive":
-        _print_archive_result(args.year, args.month, args.custom_search)
-        return 0
-#    if args.cmd == "realtime":
-#        _print_realtime(args.query, args.hours, args.limit)
-#        return 0
-
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    app.run(debug=True)
