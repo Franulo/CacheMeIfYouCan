@@ -93,16 +93,3 @@ def generate_pdf(title, text, filename="output.pdf"):
     doc.build(story)
     return filename
 
-
-articles = [
-    {"title": "Market Rally Continues", "summary": "Stocks rose sharply..."},
-    {"title": "Tech Earnings Report", "summary": "Tech companies reported strong earnings..."}
-]
-
-# Generate the podcast outline text
-outline_text = generate_podcast_outline(articles)
-
-# Generate PDF with that text
-pdf_file = generate_pdf("Podcast Outline", outline_text, filename="podcast_outline.pdf")
-
-print("✅ PDF created:", pdf_file)
