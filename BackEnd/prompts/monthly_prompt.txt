@@ -31,3 +31,4 @@ RULES
 - Keep language neutral and compact.
 - Do not invent data; derive tags from fields or obvious inference.
 - Order topics by impact (aggregate word_count desc, then frequency, then chronology).
+- Return ONLY valid JSON according to the schema above. Do not add any commentary, explanations, or labels such as “RESPONSE:”. Do not use backticks or markdown. Output must begin with `{` and end with `}`.

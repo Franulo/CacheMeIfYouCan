@@ -20,8 +20,15 @@ def get_iam_token():
 
 
 def generate_text(prompt, max_tokens, min_tokens, decoding_method="greedy"):
+    print("Generating text...")
     """Generate text using watsonx.ai."""
     iam_token = get_iam_token()
+    if not iam_token:
+        print("Failed to get IAM token")
+        return json.dumps({"error": "Failed to get IAM token"})
+    
+    print("Got IAM token")
+
     headers = {
         "Authorization": f"Bearer {iam_token}",
         "Content-Type": "application/json"
@@ -37,18 +44,30 @@ def generate_text(prompt, max_tokens, min_tokens, decoding_method="greedy"):
         "model_id": MODEL,
         "project_id": PROJECT_ID
     }
-
-    resp = requests.post(URL, headers=headers, json=payload)
-    if not resp.ok:
-        # Return structured error so callers can see details in logs
-        try:
-            err = resp.json()
-        except Exception:
-            err = {"raw": resp.text}
-        return json.dumps({"error": err, "status_code": resp.status_code}, indent=2)
-    result = resp.json()
-
+    
     try:
+        print("Sending request to watsonx.ai...")
+        resp = requests.post(URL, headers=headers, json=payload, timeout=300)
+        print(f"Response status: {resp.status_code}")
+        
+        # Check if response is successful
+        if resp.status_code != 200:
+            error_msg = f"API returned status {resp.status_code}: {resp.text}"
+            print(error_msg)
+            return json.dumps({"error": error_msg, "status_code": resp.status_code})
+        
+        result = resp.json()
+        print("Successfully parsed response JSON")
         return result["results"][0]["generated_text"].strip()
-    except Exception:
-        return json.dumps(result, indent=2)
+        
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Request failed: {str(e)}"
+        print(error_msg)
+        return json.dumps({"error": error_msg, "type": "request_error"})
+    except Exception as e:
+        error_msg = f"Error processing response: {str(e)}"
+        print(error_msg)
+        if 'resp' in locals():  # Check if resp exists
+            print(f"Response text: {resp.text}")
+            return json.dumps({"error": error_msg, "response": resp.text})
+        return json.dumps({"error": error_msg})

@@ -22,3 +22,4 @@ OUTPUT FORMAT (JSON)
 RULES
 - Only return a single JSON object, no prose.
 - Ensure all URLs are valid and deduplicated.
+- Return ONLY valid JSON according to the schema above. Do not add any commentary, explanations, or labels such as “RESPONSE:”. Do not use backticks or markdown. Output must begin with `{` and end with `}`.

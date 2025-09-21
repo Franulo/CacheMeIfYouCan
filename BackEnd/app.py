@@ -3,10 +3,11 @@ from flask_cors import CORS
 from ibm_watsonx import generate_linkedin_post
 from ibm_watsonx import generate_podcast_outline
 from nyt_openai import run_nyt_openai_pipeline  # <-- import pipeline function
+import os
 
 app = Flask(__name__)
 CORS(app)
-
+os.environ['USE_FALLBACK'] = 'true'
 # Dummy data
 ARTICLES = [
     {
@@ -49,33 +50,25 @@ DETAILS = {
 
 @app.route('/search-news', methods=['POST'])
 def search_news():
-    """
-    Expects JSON body:
-    {
-        "year": 2024,
-        "month": 9,
-        "custom_search": "AI"   # optional
-    }
-    """
-    print("fasdfdasfdas")
     data = request.get_json() or {}
 
-    year = 2024#data.get("year")
-    month = 1#data.get("month")
+    year = int(data.get("year", 2024))
+    month = int(data.get("month", 1))
     custom_search = data.get("custom_search")
-
-    if not (year and month):
-        return jsonify({"error": "Missing 'year' or 'month'"}), 400
+    tabType = data.get("tabType", "Daily")  # now expect tabType from Flutter
 
     try:
-        results = run_nyt_openai_pipeline(
-            year=int(year),
-            month=int(month),
-            custom_search=custom_search
+        result = run_nyt_openai_pipeline(
+            year=year,
+            month=month,
+            custom_search=custom_search,
+            tabType=tabType
         )
-        return jsonify(results)
+        print(result)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/article/<int:article_id>', methods=['GET'])
 def article_detail(article_id):

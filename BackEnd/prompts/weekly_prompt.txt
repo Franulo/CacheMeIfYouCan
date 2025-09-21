@@ -34,3 +34,4 @@ RULES
 - Keep language neutral and compact.
 - Do not invent data; derive tags from fields or obvious inference.
 - Sort weeks ascending by start date. Inside a week, order topics by impact (word_count desc, then input order).
+- Return ONLY valid JSON according to the schema above. Do not add any commentary, explanations, or labels such as “RESPONSE:”. Do not use backticks or markdown. Output must begin with `{` and end with `}`.

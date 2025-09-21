@@ -34,3 +34,4 @@ RULES
 - Keep language neutral and compact.
 - Do not invent data; derive tags from fields or obvious inference.
 - Sort days ascending. Within a day, list topics by descending word_count when available; else input order.
+- Return ONLY valid JSON according to the schema above. Do not add any commentary, explanations, or labels such as “RESPONSE:”. Do not use backticks or markdown. Output must begin with `{` and end with `}`.
